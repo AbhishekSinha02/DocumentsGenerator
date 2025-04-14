@@ -42,10 +42,10 @@ namespace DocumentGeneratorService
                 ExtractXsnContents(infoPathFilePath, tempFolder);
 
                 // Parse form definition
-                ParseFormDefinition(tempFolder, outputDocPath);
+              //  ParseFormDefinition(tempFolder, outputDocPath);
 
                 // Generate Word document
-                CreateWordDocument(outputDocPath);
+                //CreateWordDocument(outputDocPath);
             }
             finally
             {
@@ -61,9 +61,15 @@ namespace DocumentGeneratorService
             {
                 
                 ZipFile.ExtractToDirectory(xsnFilePath, targetFilePath);
-                
+                string[] files = Directory.GetFiles(targetFilePath, "*", SearchOption.AllDirectories);
 
-                Console.WriteLine("Form extracted successfully.");
+                this.Output = xsnFilePath + "\n\n";
+                foreach (string file in files)
+                {
+                    this.Output += file + "\n";
+                }
+
+                this.Output += files.Length + " files extracted\n\n";
             }
             catch (Exception ex)
             {
