@@ -41,18 +41,74 @@ namespace DocumentGeneratorService
                 // Extract .xsn file which is basically a ZIP/CAB file
                 ExtractXsnContents(infoPathFilePath, tempFolder);
 
+                LoadControls(tempFolder);
                 // Parse form definition
               //  ParseFormDefinition(tempFolder, outputDocPath);
 
                 // Generate Word document
-                //CreateWordDocument(outputDocPath);
+                CreateWordDocument(outputDocPath);
             }
             finally
             {
 
             }
         }
+        private void LoadControls(string directoryPath)
+        {
+           // string directoryPath = @"C:\path\to\search";
 
+            try
+            {
+                // Find all files ending with "controls.xml" in the specified directory and subdirectories
+                var controlFiles = Directory.GetFiles(directoryPath, "*controls.xml", SearchOption.AllDirectories);
+
+                if (controlFiles.Length == 0)
+                {
+                    Console.WriteLine("No files ending with 'controls.xml' found in the specified directory.");
+                    return;
+                }
+
+                this.Controls = new List<Control>();
+
+                // Process each file
+                foreach (var filePath in controlFiles)
+                {
+                    Console.WriteLine($"Processing: {filePath}");
+
+                    // Load the XML from the file
+                    XDocument xmlDoc = XDocument.Load(filePath);
+
+                    // Define namespaces
+                    XNamespace defaultNs = "http://schemas.datacontract.org/2004/07/Nintex.Forms.FormControls";
+                    XNamespace xsiNs = "http://www.w3.org/2001/XMLSchema-instance";
+
+                    // Extract FormControlProperties, including nested elements
+                    var controls = xmlDoc.Descendants(defaultNs + "FormControlProperties")
+                                         .Select(control => new Control
+                                         {
+                                             Details = control.Attribute(xsiNs + "type")?.Value,
+                                             Name = control.Element(defaultNs + "DisplayName")?.Value,
+                                             Type = control.Attribute(xsiNs + "type")?.Value,
+                                             Binding = control.Element(defaultNs + "AlternateText")?.Value
+                                         })
+                                         .ToList();
+
+
+                    Controls.AddRange(controls);
+                }
+
+                // Print the total number of controls and their details
+                //Console.WriteLine($"Total Controls Found: {Controls.Count}");
+                //foreach (var control in allControls)
+               // {
+                 //   Console.WriteLine($"Details: {control.Details}, Name: {control.Name}, Type: {control.Type}, Binding: {control.Binding}");
+               // }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+            }
+        }
         private void ExtractXsnContents(string xsnFilePath, string targetFilePath)
         {
             Console.WriteLine("Extracting InfoPath form contents...");
