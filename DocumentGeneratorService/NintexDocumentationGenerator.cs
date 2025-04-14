@@ -43,7 +43,7 @@ namespace DocumentGeneratorService
 
                 LoadControls(tempFolder);
                 // Parse form definition
-              //  ParseFormDefinition(tempFolder, outputDocPath);
+                ParseFormDefinition(tempFolder, outputDocPath);
 
                 // Generate Word document
                 CreateWordDocument(outputDocPath);
