@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Data;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -18,6 +19,38 @@ namespace DocumentGenerator
         public FrmReadFile()
         {
             InitializeComponent();
+            Bitmap originalImage = new Bitmap(pictureBox1.Image);
+            Bitmap filledImage = new Bitmap(1122, 155);
+
+            using (Graphics g = Graphics.FromImage(filledImage))
+            {
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+
+                // Determine the aspect ratio of the original image
+                float originalAspect = (float)originalImage.Width / originalImage.Height;
+                float targetAspect = (float)1122 / 155;
+
+                int cropWidth, cropHeight;
+                if (originalAspect > targetAspect)
+                {
+                    // Crop width to match target aspect ratio
+                    cropWidth = (int)(originalImage.Height * targetAspect);
+                    cropHeight = originalImage.Height;
+                }
+                else
+                {
+                    // Crop height to match target aspect ratio
+                    cropWidth = originalImage.Width;
+                    cropHeight = (int)(originalImage.Width / targetAspect);
+                }
+
+                int cropX = (originalImage.Width - cropWidth) / 2;
+                int cropY = (originalImage.Height - cropHeight) / 2;
+
+                g.DrawImage(originalImage, new Rectangle(0, 0, 1122, 155), new Rectangle(cropX, cropY, cropWidth, cropHeight), GraphicsUnit.Pixel);
+            }
+
+            pictureBox1.Image = filledImage;
         }
 
         private void btnXsn_Click(object sender, EventArgs e)
