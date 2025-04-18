@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Color = DocumentFormat.OpenXml.Wordprocessing.Color;
 using Document = DocumentFormat.OpenXml.Wordprocessing.Document;
@@ -28,6 +29,7 @@ namespace DocumentGeneratorService
         private List<Dependency> DependencyList { get; set; } = new List<Dependency>();
         private List<ImageFile> ImageFiles { get; set; } = new List<ImageFile>();
 
+        private List<UserFormVariable> formVariables = new List<UserFormVariable>();
         // Method to generate documentation
         public void GenerateDocumentation(string infoPathFilePath, string outputDocPath)
         {
@@ -42,6 +44,7 @@ namespace DocumentGeneratorService
                 ExtractXsnContents(infoPathFilePath, tempFolder);
 
                 LoadControls(tempFolder);
+                LoadUserVariables(tempFolder);
                 // Parse form definition
                 ParseFormDefinition(tempFolder, outputDocPath);
 
@@ -51,6 +54,30 @@ namespace DocumentGeneratorService
             finally
             {
 
+            }
+        }
+
+        private void LoadUserVariables(string directoryPath)
+        {
+            //string xmlFilePath = "UserVariables.xml";
+            var xmlFilePath = Directory.GetFiles(directoryPath, "*variables.xml", SearchOption.AllDirectories);
+           
+            foreach (var file in xmlFilePath)
+            {
+                XDocument xmlDoc = XDocument.Load(file);
+
+                // Get the namespace from XML
+                XNamespace ns = "http://schemas.datacontract.org/2004/07/Nintex.Forms";
+
+
+                foreach (XElement variable in xmlDoc.Root.Elements(ns + "UserFormVariable"))
+                {
+                    formVariables.Add(new UserFormVariable
+                    {
+                        Name = variable.Element(ns + "Name")?.Value,
+                        Type = variable.Element(ns + "Type")?.Value
+                    });
+                }
             }
         }
         private void LoadControls(string directoryPath)
@@ -180,7 +207,10 @@ namespace DocumentGeneratorService
             {
                 ParseScriptFile(scriptFile);
             }
-
+            foreach (var scriptFile in Directory.GetFiles(extractedFolder, "*scripts.xml",SearchOption.AllDirectories))
+            {
+                ParseScriptFile(scriptFile);
+            }
             foreach (var dllFile in Directory.GetFiles(extractedFolder, "*.dll"))
             {
                 ParseDllFile(dllFile);
@@ -597,28 +627,43 @@ namespace DocumentGeneratorService
 
             try
             {
-                string scriptContent = File.ReadAllText(scriptFilePath);
+                XDocument xmlDoc = XDocument.Load(scriptFilePath);
+                string scriptContent = xmlDoc.Root.Element("Script").Value;
 
+                // Regex pattern to extract ALL functions
+              //  MatchCollection matches = Regex.Matches(scriptContent, @"function\s+(\w+)\s*\(([^)]*)\)\s*{[^}]*return\s+(\w+);", RegexOptions.Singleline);
                 // Look for function definitions
-                var functionMatches = System.Text.RegularExpressions.Regex.Matches(
-                    scriptContent,
-                    @"function\s+([A-Za-z0-9_:]+)\s*\(([^)]*)\)"
-                );
+                //var functionMatches = System.Text.RegularExpressions.Regex.Matches(
+                //    scriptContent,
+                //    @"function\s+([A-Za-z0-9_:]+)\s*\(([^)]*)\)"
+                //);
 
-                foreach (System.Text.RegularExpressions.Match match in functionMatches)
+                //foreach (System.Text.RegularExpressions.Match match in matches)
+                //{
+                //    string functionName = match.Groups[1].Value;
+                //    string parameters = match.Groups[2].Value;
+
+                //    Scripts.Add(new Script
+                //    {
+                //        Name = functionName,
+                //        Parameters = parameters,
+                //        FilePath = Path.GetFileName(scriptFilePath)
+                //    });
+                //}
+
+                //MatchCollection matches = Regex.Matches(scriptContent, @"function\s+(\w+)\s*\(([^)]*)\)\s*{[^}]*return\s+(\w+);", RegexOptions.Singleline);
+                MatchCollection matches = Regex.Matches(scriptContent, @"function\s+(\w+)\s*\(([^)]*)\)\s*{([^}]*)}", RegexOptions.Singleline);
+                // List<FormScript> functionsList = new List<FormScript>();
+
+                foreach (Match match in matches)
                 {
-                    string functionName = match.Groups[1].Value;
-                    string parameters = match.Groups[2].Value;
-
                     Scripts.Add(new Script
                     {
-                        Name = functionName,
-                        Parameters = parameters,
-                        FilePath = Path.GetFileName(scriptFilePath)
+                        Name = match.Groups[1].Value,
+                        Parameters = match.Groups[2].Value.Replace(" ", ""), // Remove extra spaces
+                        FilePath = match.Groups[3].Value
                     });
                 }
-
-                Console.WriteLine($"Found {functionMatches.Count} script functions.");
             }
             catch (Exception ex)
             {
@@ -785,7 +830,9 @@ namespace DocumentGeneratorService
                 // Dependencies Section
                 AddSection(body, $"{sectionNumber++}. Dependencies", "Heading1");
                 AddDependenciesTable(body);
-
+                // Dependencies Section
+                AddSection(body, $"{sectionNumber++}. User Variables", "Heading1");
+                AddUserVariables(body);
                 // Dependencies Section
                 AddSection(body, $"{sectionNumber++}. Assets", "Heading1");
                 AddImagesTable(body);
@@ -1120,6 +1167,61 @@ namespace DocumentGeneratorService
             body.Append(table);
         }
 
+        private void AddUserVariables(Body body)
+        {
+            if (Scripts.Count == 0)
+            {
+                AddText(body, "No scripts or business logic found in the form.", "Normal");
+                return;
+            }
+
+            Table table = new Table();
+
+            // Set table properties
+            TableProperties tableProperties = new TableProperties();
+            TableBorders tableBorders = new TableBorders();
+            TopBorder topBorder = new TopBorder() { Val = BorderValues.Single, Size = 4U };
+            BottomBorder bottomBorder = new BottomBorder() { Val = BorderValues.Single, Size = 4U };
+            LeftBorder leftBorder = new LeftBorder() { Val = BorderValues.Single, Size = 4U };
+            RightBorder rightBorder = new RightBorder() { Val = BorderValues.Single, Size = 4U };
+            InsideHorizontalBorder insideHBorder = new InsideHorizontalBorder() { Val = BorderValues.Single, Size = 4U };
+            InsideVerticalBorder insideVBorder = new InsideVerticalBorder() { Val = BorderValues.Single, Size = 4U };
+
+            tableBorders.Append(topBorder);
+            tableBorders.Append(bottomBorder);
+            tableBorders.Append(leftBorder);
+            tableBorders.Append(rightBorder);
+            tableBorders.Append(insideHBorder);
+            tableBorders.Append(insideVBorder);
+
+            tableProperties.Append(tableBorders);
+            table.Append(tableProperties);
+
+            // Add header row
+            TableRow headerRow = new TableRow();
+
+            // Header cells
+            headerRow.Append(CreateTableCell("Name", true));
+            headerRow.Append(CreateTableCell("Type", true));
+            // headerRow.Append(CreateTableCell("Source File", true));
+
+            table.Append(headerRow);
+
+            // Add data rows
+            foreach (var script in formVariables)
+            {
+                TableRow dataRow = new TableRow();
+
+                dataRow.Append(CreateTableCell(script.Name));
+                dataRow.Append(CreateTableCell(script.Type));
+                //  dataRow.Append(CreateTableCell(script.FilePath));
+
+                table.Append(dataRow);
+            }
+
+            body.Append(table);
+        }
+
         private void AddScriptsTable(Body body)
         {
             if (Scripts.Count == 0)
@@ -1156,7 +1258,7 @@ namespace DocumentGeneratorService
             // Header cells
             headerRow.Append(CreateTableCell("Function Name", true));
             headerRow.Append(CreateTableCell("Parameters", true));
-            headerRow.Append(CreateTableCell("Source File", true));
+           // headerRow.Append(CreateTableCell("Source File", true));
 
             table.Append(headerRow);
 
@@ -1167,7 +1269,7 @@ namespace DocumentGeneratorService
 
                 dataRow.Append(CreateTableCell(script.Name));
                 dataRow.Append(CreateTableCell(script.Parameters));
-                dataRow.Append(CreateTableCell(script.FilePath));
+              //  dataRow.Append(CreateTableCell(script.FilePath));
 
                 table.Append(dataRow);
             }

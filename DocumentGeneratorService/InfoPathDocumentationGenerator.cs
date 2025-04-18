@@ -1632,4 +1632,10 @@ namespace DocumentGeneratorService
     {
         public string FileName { get; set; }
     }
+
+    class UserFormVariable
+    {
+        public string Name { get; set; }
+        public string Type { get; set; }
+    }
 }
