@@ -20,8 +20,8 @@ namespace DocumentGeneratorService
         public string Output { get; set; }
         // Main class properties to store form information
         private List<Control> Controls { get; set; } = new List<Control>();
-        private List<DataSource> DataSources { get; set; } = new List<DataSource>();
-        private List<Rule> Rules { get; set; } = new List<Rule>();
+        private List<Layouts> FormLayouts { get; set; } = new List<Layouts>();
+        private List<NintexFormRule> Rules { get; set; } = new List<NintexFormRule>();
         private List<Script> Scripts { get; set; } = new List<Script>();
         private List<Workflow> Workflows { get; set; } = new List<Workflow>();
         private Dictionary<string, List<string>> Dependencies { get; set; } = new Dictionary<string, List<string>>();
@@ -41,18 +41,74 @@ namespace DocumentGeneratorService
                 // Extract .xsn file which is basically a ZIP/CAB file
                 ExtractXsnContents(infoPathFilePath, tempFolder);
 
+                LoadControls(tempFolder);
                 // Parse form definition
-              //  ParseFormDefinition(tempFolder, outputDocPath);
+                ParseFormDefinition(tempFolder, outputDocPath);
 
                 // Generate Word document
-                //CreateWordDocument(outputDocPath);
+                CreateWordDocument(outputDocPath);
             }
             finally
             {
 
             }
         }
+        private void LoadControls(string directoryPath)
+        {
+           // string directoryPath = @"C:\path\to\search";
 
+            try
+            {
+                // Find all files ending with "controls.xml" in the specified directory and subdirectories
+                var controlFiles = Directory.GetFiles(directoryPath, "*controls.xml", SearchOption.AllDirectories);
+
+                if (controlFiles.Length == 0)
+                {
+                    Console.WriteLine("No files ending with 'controls.xml' found in the specified directory.");
+                    return;
+                }
+
+                this.Controls = new List<Control>();
+
+                // Process each file
+                foreach (var filePath in controlFiles)
+                {
+                    Console.WriteLine($"Processing: {filePath}");
+
+                    // Load the XML from the file
+                    XDocument xmlDoc = XDocument.Load(filePath);
+
+                    // Define namespaces
+                    XNamespace defaultNs = "http://schemas.datacontract.org/2004/07/Nintex.Forms.FormControls";
+                    XNamespace xsiNs = "http://www.w3.org/2001/XMLSchema-instance";
+
+                    // Extract FormControlProperties, including nested elements
+                    var controls = xmlDoc.Descendants(defaultNs + "FormControlProperties")
+                                         .Select(control => new Control
+                                         {
+                                             //Details = control.Attribute(xsiNs + "type")?.Value,
+                                             Name = control.Element(defaultNs + "DisplayName")?.Value,
+                                             Type = control.Attribute(xsiNs + "type")?.Value,
+                                             Binding = control.Element(defaultNs + "AlternateText")?.Value
+                                         })
+                                         .ToList();
+
+
+                    Controls.AddRange(controls);
+                }
+
+                // Print the total number of controls and their details
+                //Console.WriteLine($"Total Controls Found: {Controls.Count}");
+                //foreach (var control in allControls)
+               // {
+                 //   Console.WriteLine($"Details: {control.Details}, Name: {control.Name}, Type: {control.Type}, Binding: {control.Binding}");
+               // }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+            }
+        }
         private void ExtractXsnContents(string xsnFilePath, string targetFilePath)
         {
             Console.WriteLine("Extracting InfoPath form contents...");
@@ -81,23 +137,34 @@ namespace DocumentGeneratorService
         {
             Console.WriteLine("Parsing form definition...");
 
-            // Look for key files
-            string manifestFile = Path.Combine(extractedFolder, "manifest.xsf");
+            //Look for key files
+
+            string manifestFile = Path.Combine(extractedFolder, "manifest.xml");
             if (!File.Exists(manifestFile))
-            {
-                throw new FileNotFoundException("Manifest file (manifest.xsf) not found in the InfoPath form package.");
-            }
+                {
+                    throw new FileNotFoundException("Manifest file (manifest.xsf) not found in the InfoPath form package.");
+                }
 
             // Parse the manifest file
             XDocument manifest = XDocument.Load(manifestFile);
             XNamespace xsfNs = "http://schemas.microsoft.com/office/infopath/2003/solutionDefinition";
 
             // Get basic form information
-            var formName = manifest.Descendants(xsfNs + "title").FirstOrDefault()?.Value ?? "Unnamed Form";
-            Console.WriteLine($"Form name: {formName}");
+            //var formName = manifest.Descendants("title").FirstOrDefault()?.Value ?? "Unnamed Form";
+            //Console.WriteLine($"Form name: {formName}");
+
+            string FormFolder = Path.Combine(extractedFolder, "Form");
+            string layoutsFile = Path.Combine(FormFolder, "FormLayouts.xml");
+            XDocument layoutFormat = XDocument.Load(layoutsFile);
+            XNamespace nintexNamespace = "http://schemas.datacontract.org/2004/07/Nintex.Forms";
+            ParseLayouts(layoutFormat, nintexNamespace);
 
             // Parse data sources
-            ParseDataSources(manifest, xsfNs);
+            string rulesFile = Path.Combine(FormFolder, "FormRules.xml");
+            XDocument rulesFormat = XDocument.Load(rulesFile);
+
+            // Parse rules and validations from manifest
+            ParseRulesAndValidations(rulesFormat, nintexNamespace);
 
             // Parse form files to find controls
 
@@ -118,8 +185,8 @@ namespace DocumentGeneratorService
             {
                 ParseDllFile(dllFile);
             }
-            // Parse rules and validations from manifest
-            ParseRulesAndValidations(manifest, xsfNs);
+
+
             ParseSchemaForValidations(extractedFolder, xsfNs);
             // Try to find workflow information
             ParseWorkflows(manifest, xsfNs);
@@ -167,41 +234,41 @@ namespace DocumentGeneratorService
 
         private void ParseSchemaForValidations(string extractedFolder, XNamespace xsfNs)
         {
-            Console.WriteLine($"Beginning to parse schema for validation rules with {Rules.Count} validations .");
+            //Console.WriteLine($"Beginning to parse schema for validation rules with {Rules.Count} validations .");
 
-            List<string> schemaFiles = Directory.GetFiles(extractedFolder).Where(x => x.EndsWith(".xsd")).ToList();
-            foreach (var schemaFile in schemaFiles)
-            {
-                if (!File.Exists(schemaFile))
-                {
-                    throw new FileNotFoundException("Schema file (schema.xsd) not found in the InfoPath form package.");
-                }
-                XDocument schema = XDocument.Load(schemaFile);
-                var descendentNodes = schema.DescendantNodes().Distinct().ToList();
+            //List<string> schemaFiles = Directory.GetFiles(extractedFolder).Where(x => x.EndsWith(".xsd")).ToList();
+            //foreach (var schemaFile in schemaFiles)
+            //{
+            //    if (!File.Exists(schemaFile))
+            //    {
+            //        throw new FileNotFoundException("Schema file (schema.xsd) not found in the InfoPath form package.");
+            //    }
+            //    XDocument schema = XDocument.Load(schemaFile);
+            //    var descendentNodes = schema.DescendantNodes().Distinct().ToList();
 
-                foreach (var node in descendentNodes)
-                {
-                    if (node.NodeType.ToString() == "Element")
-                    {
-                        var elementNode = (XElement)node;
-                        var type = elementNode.Attribute("type")?.Value ?? string.Empty;
-                        if (type.Contains("required", StringComparison.OrdinalIgnoreCase))
-                        {
-                            Rules.Add(new Rule
-                            {
-                                Name = elementNode.Attribute("name")?.Value ?? string.Empty,
-                                Type = "Required",
-                                Expression = type,
-                                Message = type,
-                                Field = elementNode.Attribute("name")?.Value ?? string.Empty
-                            });
+            //    foreach (var node in descendentNodes)
+            //    {
+            //        if (node.NodeType.ToString() == "Element")
+            //        {
+            //            var elementNode = (XElement)node;
+            //            var type = elementNode.Attribute("type")?.Value ?? string.Empty;
+            //            if (type.Contains("required", StringComparison.OrdinalIgnoreCase))
+            //            {
+            //                Rules.Add(new Rule
+            //                {
+            //                    Name = elementNode.Attribute("name")?.Value ?? string.Empty,
+            //                    Type = "Required",
+            //                    Expression = type,
+            //                    Message = type,
+            //                    Field = elementNode.Attribute("name")?.Value ?? string.Empty
+            //                });
 
-                        }
-                    }
+            //            }
+            //        }
 
-                }
-            }
-            Console.WriteLine($"Total of {Rules.Count} validations found.");
+            //    }
+            //}
+            //Console.WriteLine($"Total of {Rules.Count} validations found.");
 
         }
         private void ParseDependencies(XDocument manifest, XNamespace xsfNs, string extractedFolder)
@@ -277,99 +344,36 @@ namespace DocumentGeneratorService
             Console.WriteLine($"Total dependencies found: {DependencyList.Count}");
         }
 
-        private void ParseDataSources(XDocument manifest, XNamespace xsfNs)
+        private void ParseLayouts(XDocument layoutFormat, XNamespace layoutNamespace)
         {
-            Console.WriteLine("Parsing data sources...");
-            XNamespace xsfNss = "http://schemas.microsoft.com/office/infopath/2006/solutionDefinition/extensions";
+            Console.WriteLine("Parsing layouts...");
 
-            var dataSources = manifest.Descendants(xsfNs + "dataObject");
+            var layouts = layoutFormat.Descendants(layoutNamespace + "FormLayout");
 
-            foreach (var dataObject in dataSources)
+            foreach (var layout in layouts)
             {
-                var name = dataObject.Attribute("name")?.Value ?? "Unnamed Data Source";
-                var type = "";
-                var desc = "";
-                // Identify Adapter Type
-                var adapter = dataObject.Descendants().Skip(1).FirstOrDefault();
-                var adapterType = "";
-                if (adapter != null)
+                var deviceName = layout.Descendants(layoutNamespace + "DeviceName").FirstOrDefault()?.Value;
+             
+                if (deviceName == null)
                 {
-                    adapterType = adapter.Name.LocalName;
-                    Console.WriteLine($"  - Adapter Type: {adapter.Name.LocalName}");
-
-                    if (adapterType == "SharePointListAdapter")
-                    { type = "SharePoint List/Library"; desc = "Get/update SharePoint data"; }
-                    else if (adapterType == "adoAdapter")
-                    { type = "SQL Database"; desc = "Query SQL Server"; }
-                    else if (adapterType == "httpAdapter")
-                    { type = "REST API (HTTP GET/POST)"; desc = "Retrieve JSON/XML data from REST API"; }
-                    else if (adapterType == "fileAdapter")
-                    { type = "XML File Connection"; desc = "Load XML from a file or URL"; }
-                    else if (adapterType == "webServiceAdapter")
-                    { type = "Web Service (SOAP)"; desc = "Query/submit data via SOAP"; }
-                    else if (adapterType == "emailAdapter")
-                    { type = "Email Submission"; desc = "Submit form data via email"; }
-                    else if (adapterType == "udcAdapter")
-                    { type = "Universal Data Connection (UDC)"; desc = "External UDC connection (SQL, SharePoint)"; }
-                    else if (name == "Main")
-                    { type = "Main"; desc = "Primary form data storage"; }
-                    else
-                    { type = "Unknown"; desc = "Unknown data source"; }
-
-                    // Get key attributes of each adapter
-                    foreach (var attr in adapter.Attributes())
-                    {
-                        Console.WriteLine($"    - {attr.Name}: {attr.Value}");
-                    }
-
-                    DataSources.Add(new DataSource
-                    {
-                        Name = name,
-                        Type = adapterType,
-                        Description = desc
-                    });
+                    Console.WriteLine("DeviceName not found in layout.");
+                    continue;
                 }
+
+                var title = layout.Descendants(layoutNamespace + "Title").FirstOrDefault()?.Value;
+
+                //var formControllayouts = layout.Descendants(layoutNamespace + "FormControlLayout");
+
+                FormLayouts.Add(new Layouts
+                {
+                    Name = deviceName,
+                    Title = title
+                });
 
                 Console.WriteLine(new string('-', 50)); // Separator
-            }
+            }            
 
-            dataSources = manifest.Descendants(xsfNss + "dataConnections").Descendants();
-
-            foreach (var dataSource in dataSources)
-            {
-                var adapterType = "";
-                var sourceName = "";
-                var sourceDesc = "";
-                if (dataSource != null)
-                {
-                    adapterType = dataSource.Name.LocalName;
-
-                    if (adapterType == "emailAdapterExtension")
-                    {
-                        sourceName = "Email Submission Extension";
-                        sourceDesc = "EmailAttachmentType (XML)";
-                    }
-                    else if (adapterType == "sharepointListAdapterExtended")
-                    {
-                        sourceName = dataSource.Attributes("name").FirstOrDefault()?.Value ?? "Unknown name";
-                        sourceDesc = "SharePoint Universal Data Connection(.udcx)";
-                    }
-                    else
-                    {
-                        sourceName = dataSource.Attributes("name").FirstOrDefault()?.Value ?? "Unknown name";
-                        sourceDesc = "Unknown data source";
-                    }
-
-                    DataSources.Add(new DataSource
-                    {
-                        Name = sourceName,
-                        Type = adapterType,
-                        Description = sourceDesc
-                    });
-                }
-            }
-
-            Console.WriteLine($"Found {DataSources.Count} data sources.");
+            Console.WriteLine($"Found {FormLayouts.Count} Formlayouts.");
         }
 
         private void ParseViewFile(string viewFilePath)
@@ -622,58 +626,34 @@ namespace DocumentGeneratorService
             }
         }
 
-        private void ParseRulesAndValidations(XDocument manifest, XNamespace xsfNs)
+        private void ParseRulesAndValidations(XDocument rulesFormat, XNamespace nintexNamespace)
         {
             Console.WriteLine("Parsing rules and validations...");
 
-            var descendentNodes = manifest.DescendantNodes().Distinct().ToList();
+            var rules = rulesFormat.Descendants(nintexNamespace + "Rule");
 
-            foreach (var node in descendentNodes)
+            foreach (var rule in rules)
             {
-                if (node.NodeType.ToString() == "Element")
-                {
-                    var elementNode = (XElement)node;
+                var expression = rule.Descendants(nintexNamespace + "Expression").FirstOrDefault()?.Value;
 
-                    if (elementNode.Name.LocalName == "errorCondition")
-                    {
-                        string validationName = elementNode.Attribute("name")?.Value ?? "Unnamed Validation";
-                        string expression = elementNode.Attribute("expression")?.Value ?? "";
-                        string message = "No message node found";
-                        string field = elementNode.Attribute("expressionContext")?.Value ?? "";
+                if (expression == null)
+                {
+                    Console.WriteLine("Expression not found in rule.");
+                    continue;
+                }
 
-                        var messageNode = elementNode.Descendants().Where(e => e.Name.LocalName == "errorMessage")?.FirstOrDefault();
-                        message = messageNode.Attribute("shortMessage")?.ToString() ?? "No shortMessage present";
-                        if (String.IsNullOrEmpty(field) || field == ".")
-                        {
-                            var matchValue = elementNode?.Attribute("match")?.Value ?? "";
-                            field = matchValue?.Split('/')?.LastOrDefault() ?? "No field specified";
-                        }
+                var expressionValue = rule.Descendants(nintexNamespace + "ExpressionValue").FirstOrDefault()?.Value;
 
-                        Rules.Add(new Rule
-                        {
-                            Name = validationName,
-                            Type = "Validation",
-                            Expression = expression,
-                            Message = message,
-                            Field = field
-                        });
-                    }
-                }
-                else if (node.NodeType.ToString() == "Comment" || node.NodeType.ToString() == "Text")
+                Rules.Add(new NintexFormRule
                 {
-                    //Do nothing for now
-                }
-                else if (node.NodeType.ToString() == "ProcessingInstruction")
-                {
-                    Console.WriteLine($"{node.NodeType.ToString()} {node.ToString()}");
-                }
-                else
-                {
-                    Console.WriteLine($"Unknown Type of node {node.NodeType.ToString()}");
-                }
+                    Expression = expression,
+                    ExpressionValue = expressionValue
+                });
+
+                Console.WriteLine(new string('-', 50)); // Separator
             }
 
-            Console.WriteLine($"Found {Rules.Count} rules and validations.");
+            Console.WriteLine($"Found {Rules.Count} Rules.");   
         }
 
         private void ParseWorkflows(XDocument manifest, XNamespace xsfNs)
@@ -787,12 +767,12 @@ namespace DocumentGeneratorService
                 AddControlsTable(body);
 
                 // Rules Section
-                AddSection(body, $"{sectionNumber++}. Validation Rules", "Heading1");
+                AddSection(body, $"{sectionNumber++}. Rules", "Heading1");
                 AddRulesTable(body);
 
                 // Data Sources Section
-                AddSection(body, $"{sectionNumber++}. Data Sources", "Heading1");
-                AddDataSourcesTable(body);
+                AddSection(body, $"{sectionNumber++}. Layouts", "Heading1");
+                AddFormLayouts(body);
 
                 // Scripts Section
                 AddSection(body, $"{sectionNumber++}. Scripts and Business Logic", "Heading1");
@@ -807,7 +787,7 @@ namespace DocumentGeneratorService
                 AddDependenciesTable(body);
 
                 // Dependencies Section
-                AddSection(body, $"{sectionNumber++}. Images", "Heading1");
+                AddSection(body, $"{sectionNumber++}. Assets", "Heading1");
                 AddImagesTable(body);
 
                 // Add page numbers
@@ -1067,9 +1047,8 @@ namespace DocumentGeneratorService
             TableRow headerRow = new TableRow();
 
             // Header cells
-            headerRow.Append(CreateTableCell("Field", true));
-            headerRow.Append(CreateTableCell("Type", true));
-            headerRow.Append(CreateTableCell("Details", true));
+            headerRow.Append(CreateTableCell("Expression", true));
+            headerRow.Append(CreateTableCell("ExpressionValue", true));
 
             table.Append(headerRow);
 
@@ -1078,17 +1057,8 @@ namespace DocumentGeneratorService
             {
                 TableRow dataRow = new TableRow();
 
-                dataRow.Append(CreateTableCell(rule.Field));
-                dataRow.Append(CreateTableCell(rule.Type));
-
-                string details = rule.Type == "Validation"
-                    ? $"Expression: {rule.Expression}\nMessage: {rule.Message}"
-                    : $"Event: {rule.Event}\nFunction: {rule.FunctionName}";
-                if (rule.Type.Equals("Required", StringComparison.OrdinalIgnoreCase))
-                {
-                    details = $"Type: {rule.Expression}";
-                }
-                dataRow.Append(CreateTableCell(details));
+                dataRow.Append(CreateTableCell(rule.Expression));
+                dataRow.Append(CreateTableCell(rule.ExpressionValue));               
 
                 table.Append(dataRow);
             }
@@ -1096,9 +1066,9 @@ namespace DocumentGeneratorService
             body.Append(table);
         }
 
-        private void AddDataSourcesTable(Body body)
+        private void AddFormLayouts(Body body)
         {
-            if (DataSources.Count == 0)
+            if (FormLayouts.Count == 0)
             {
                 AddText(body, "No data sources found in the form.", "Normal");
                 return;
@@ -1130,20 +1100,19 @@ namespace DocumentGeneratorService
             TableRow headerRow = new TableRow();
 
             // Header cells
-            headerRow.Append(CreateTableCell("Data Source Name", true));
-            headerRow.Append(CreateTableCell("Type", true));
-            headerRow.Append(CreateTableCell("Description", true));
+            headerRow.Append(CreateTableCell("Device Name", true));
+            headerRow.Append(CreateTableCell("Title", true));
+           // headerRow.Append(CreateTableCell("Description", true));
 
             table.Append(headerRow);
 
             // Add data rows
-            foreach (var dataSource in DataSources)
+            foreach (var formLayout in FormLayouts)
             {
                 TableRow dataRow = new TableRow();
 
-                dataRow.Append(CreateTableCell(dataSource.Name));
-                dataRow.Append(CreateTableCell(dataSource.Type));
-                dataRow.Append(CreateTableCell(dataSource.Description));
+                dataRow.Append(CreateTableCell(formLayout.Name));
+                dataRow.Append(CreateTableCell(formLayout.Title));
 
                 table.Append(dataRow);
             }
@@ -1561,23 +1530,17 @@ namespace DocumentGeneratorService
     //    public string Binding { get; set; }
     //}
 
-    //public class DataSource
-    //{
-    //    public string Name { get; set; }
-    //    public string Type { get; set; }
-    //    public string Description { get; set; }
-    //}
+    public class Layouts
+    {
+        public string Name { get; set; }
+        public string Title { get; set; }
+    }
 
-    //public class Rule
-    //{
-    //    public string Name { get; set; }
-    //    public string Type { get; set; }
-    //    public string Expression { get; set; }
-    //    public string Message { get; set; }
-    //    public string Event { get; set; }
-    //    public string FunctionName { get; set; }
-    //    public string Field { get; set; }
-    //}
+    public class NintexFormRule
+    {        
+        public string Expression { get; set; }        
+        public string ExpressionValue { get; set; }
+    }
 
     //public class Script
     //{
