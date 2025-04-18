@@ -178,7 +178,9 @@ namespace DocumentGenerator
                 if (Directory.Exists(directoryPath))
                 {
                     // Get all .xsn files from the directory (including subdirectories)
-                    string[] xsnFiles = Directory.GetFiles(directoryPath, "*.xsn", SearchOption.AllDirectories);
+                    string[] xsnFiles = Directory.GetFiles(directoryPath, "*.xsn", SearchOption.AllDirectories)
+                             .Concat(Directory.GetFiles(directoryPath, "*.nfp", SearchOption.AllDirectories))
+                             .ToArray();
 
                     // If there are any files, print the filenames
                     if (xsnFiles.Length > 0)
