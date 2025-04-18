@@ -113,11 +113,10 @@ namespace DocumentGeneratorService
                     var controls = xmlDoc.Descendants(defaultNs + "FormControlProperties")
                                          .Select(control => new Control
                                          {
-                                             //Details = control.Attribute(xsiNs + "type")?.Value,
                                              Name = control.Element(defaultNs + "DisplayName")?.Value,
                                              Type = control.Attribute(xsiNs + "type")?.Value,
-                                             Binding = control.Element(defaultNs + "AlternateText")?.Value,
-                                             UniqueId = control.Element(defaultNs + "UniqueId")?.Value
+                                             UniqueId = control.Element(defaultNs + "UniqueId")?.Value,
+                                             IsVisible = control.Element(defaultNs + "IsVisible")?.Value
                                          })
                                          .ToList();
 
@@ -194,14 +193,7 @@ namespace DocumentGeneratorService
             // Parse rules and validations from manifest
             ParseRulesAndValidations(rulesFormat, nintexNamespace);
 
-            // Parse form files to find controls
-
-            //TODO: Add functionality to read controls if necessary from other view files (view2 etc)
-            string defaultViewFile = Path.Combine(extractedFolder, "view1.xsl");
-            if (File.Exists(defaultViewFile))
-            {
-                ParseViewFile(defaultViewFile);
-            }
+            // Parse form files to find controls            
 
             // Look for script files
             foreach (var scriptFile in Directory.GetFiles(extractedFolder, "*.js"))
@@ -216,165 +208,13 @@ namespace DocumentGeneratorService
             {
                 ParseDllFile(dllFile);
             }
-
-
-            ParseSchemaForValidations(extractedFolder, xsfNs);
-            // Try to find workflow information
-            ParseWorkflows(manifest, xsfNs);
-
-            ParseDependencies(manifest, xsfNs, extractedFolder);
+                        
             ParseImages(manifest, xsfNs);
 
             //CopyFilesIntoReferenceFolder(outputPath, extractedFolder);
             Console.WriteLine("Parsing completed.");
         }
-
-        private void CopyFilesIntoReferenceFolder(string outputDirPath, string extractedFilesPath)
-        {
-
-            string outputFilesPath = outputDirPath.Split(".")[0];
-            if (ImageFiles.Count > 0 || DependencyList.Count > 0)
-            {
-                if (!Directory.Exists(outputFilesPath))
-                {
-                    Directory.CreateDirectory(outputFilesPath);
-                }
-
-                //foreach (var image in ImageFiles)
-                //{
-
-                //    CopyFile(outputFilesPath, extractedFilesPath, image.FileName);
-                //}
-
-                //foreach (var dependencyFile in DependencyList)
-                //{
-                //    CopyFile(outputFilesPath, extractedFilesPath, dependencyFile.Name);
-                //}
-            }
-        }
-        private void CopyFile(string outputFilesPath, string extractedFilesPath, string fileName)
-        {
-            string imageFilePath = Path.Combine(extractedFilesPath, fileName);
-            string outputImagePath = Path.Combine(outputFilesPath, fileName);
-            if (File.Exists(imageFilePath))
-            {
-                File.Copy(imageFilePath, outputImagePath, true);
-            }
-        }
-
-
-        private void ParseSchemaForValidations(string extractedFolder, XNamespace xsfNs)
-        {
-            //Console.WriteLine($"Beginning to parse schema for validation rules with {Rules.Count} validations .");
-
-            //List<string> schemaFiles = Directory.GetFiles(extractedFolder).Where(x => x.EndsWith(".xsd")).ToList();
-            //foreach (var schemaFile in schemaFiles)
-            //{
-            //    if (!File.Exists(schemaFile))
-            //    {
-            //        throw new FileNotFoundException("Schema file (schema.xsd) not found in the InfoPath form package.");
-            //    }
-            //    XDocument schema = XDocument.Load(schemaFile);
-            //    var descendentNodes = schema.DescendantNodes().Distinct().ToList();
-
-            //    foreach (var node in descendentNodes)
-            //    {
-            //        if (node.NodeType.ToString() == "Element")
-            //        {
-            //            var elementNode = (XElement)node;
-            //            var type = elementNode.Attribute("type")?.Value ?? string.Empty;
-            //            if (type.Contains("required", StringComparison.OrdinalIgnoreCase))
-            //            {
-            //                Rules.Add(new Rule
-            //                {
-            //                    Name = elementNode.Attribute("name")?.Value ?? string.Empty,
-            //                    Type = "Required",
-            //                    Expression = type,
-            //                    Message = type,
-            //                    Field = elementNode.Attribute("name")?.Value ?? string.Empty
-            //                });
-
-            //            }
-            //        }
-
-            //    }
-            //}
-            //Console.WriteLine($"Total of {Rules.Count} validations found.");
-
-        }
-        private void ParseDependencies(XDocument manifest, XNamespace xsfNs, string extractedFolder)
-        {
-            Console.WriteLine("Parsing dependencies from xsf file...");
-            // Parse for explicit DLL references via <xsf:script>
-            var scriptElements = manifest.Descendants(xsfNs + "script")
-                .Where(s => s.Attribute("name") != null &&
-                            s.Attribute("name").Value.EndsWith(".dll", StringComparison.OrdinalIgnoreCase));
-
-            foreach (var script in scriptElements)
-            {
-                DependencyList.Add(new Dependency
-                {
-                    Name = script.Attribute("name")?.Value,
-                    Project = script.Attribute("project")?.Value ?? "Unknown",
-                    Language = script.Attribute("language")?.Value ?? "Unknown",
-                    ScriptLanguageVersion = script.Attribute("scriptLanguageVersion")?.Value ?? "Unknown"
-                });
-            }
-
-            // Parse for implicit DLL references in <xsf:file> with rootAssembly
-            var fileElements = manifest.Descendants(xsfNs + "file")
-                .Where(f => f.Attribute("name") != null && f.Elements(xsfNs + "fileProperties")
-                    .Any(p => p.Elements(xsfNs + "property")
-                        .Any(prop => prop.Attribute("name")?.Value == "fileType" &&
-                                     prop.Attribute("value")?.Value == "rootAssembly")));
-
-            foreach (var file in fileElements)
-            {
-                DependencyList.Add(new Dependency
-                {
-                    Name = file.Attribute("name")?.Value,
-                    Project = "Implicit DLL",
-                    Language = "Managed Code",
-                    ScriptLanguageVersion = "N/A"
-                });
-            }
-
-            Console.WriteLine("Scanning for JavaScript and VBScript files...");
-
-            if (string.IsNullOrWhiteSpace(extractedFolder) || !Directory.Exists(extractedFolder))
-            {
-                Console.WriteLine("Invalid extracted folder path for scanning scripts.");
-                return;
-            }
-
-            var jsFiles = Directory.GetFiles(extractedFolder, "*.js");
-            var vbsFiles = Directory.GetFiles(extractedFolder, "*.vbs");
-
-            foreach (var js in jsFiles)
-            {
-                DependencyList.Add(new Dependency
-                {
-                    Name = Path.GetFileName(js),
-                    Project = "Client Script",
-                    Language = "JavaScript",
-                    ScriptLanguageVersion = "N/A"
-                });
-            }
-
-            foreach (var vbs in vbsFiles)
-            {
-                DependencyList.Add(new Dependency
-                {
-                    Name = Path.GetFileName(vbs),
-                    Project = "Client Script",
-                    Language = "VBScript",
-                    ScriptLanguageVersion = "N/A"
-                });
-            }
-
-            Console.WriteLine($"Total dependencies found: {DependencyList.Count}");
-        }
-
+               
         private void ParseLayouts(XDocument layoutFormat, XNamespace layoutNamespace)
         {
             Console.WriteLine("Parsing layouts...");
@@ -405,163 +245,8 @@ namespace DocumentGeneratorService
             }            
 
             Console.WriteLine($"Found {FormLayouts.Count} Formlayouts.");
-        }
-
-        private void ParseViewFile(string viewFilePath)
-        {
-            Console.WriteLine($"Parsing view file: {Path.GetFileName(viewFilePath)}");
-
-            try
-            {
-                XDocument viewDoc = XDocument.Load(viewFilePath);
-
-                // The XSL file contains the form UI definition
-                // Look for controls - typically in xsl:template elements
-                var templates = viewDoc.Descendants().Where(e => e.Name.LocalName == "template");
-
-                foreach (var template in templates)
-                {
-                    ParseControlsFromTemplate(template);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Warning: Could not parse view file {viewFilePath}: {ex.Message}");
-            }
-        }
-
-        private void ParseControlsFromTemplate(XElement template)
-        {
-            // Look for common InfoPath control patterns
-            // This is a simplified approach - real implementation would be more comprehensive
-
-            // Look for spans with xd:binding attributes (usually bound controls)
-            var boundControls = template.Descendants()
-                .Where(e => e.Attributes().Any(a => a.Name.LocalName == "binding" || a.Name.LocalName == "xctname"));
-
-            foreach (var control in boundControls)
-            {
-                string controlType = DetermineControlType(control);
-                string controlName = control.Attribute(XName.Get("xctname", "http://schemas.microsoft.com/office/infopath/2003"))?.Value
-                    ?? control.Attribute(XName.Get("binding", "http://schemas.microsoft.com/office/infopath/2003"))?.Value
-                    ?? "Unnamed Control";
-                string controlOptions = string.Empty;
-
-                if (controlType.Equals("Drop-down List", StringComparison.OrdinalIgnoreCase))
-                {
-                    var descendentOptions = control.DescendantNodes();
-                    foreach (var node in descendentOptions)
-                    {
-                        if (node.NodeType.ToString() == "Element")
-                        {
-                            var ElementNode = (XElement)node;
-                            if (ElementNode.Name.LocalName == "option")
-                            {
-                                var option = ElementNode.Attribute("value")?.Value ?? string.Empty;
-                                if (!string.IsNullOrEmpty(option))
-                                {
-                                    if (controlOptions.Length > 0)
-                                    {
-                                        controlOptions += $", {option}";
-                                    }
-                                    else
-                                    {
-                                        controlOptions += option;
-                                    }
-                                }
-
-                            }
-                        }
-                    }
-
-                }
-                else if (controlName.Equals("CheckBox", StringComparison.OrdinalIgnoreCase))
-                {
-                    string title = control.Attribute("title")?.Value ?? " TODO: Still Pending ";
-                    controlOptions = title;
-                }
-                else if (controlName.Equals("OptionButton", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (control.NextNode?.NodeType == System.Xml.XmlNodeType.Text)
-                    {
-                        var nextNode = (XText)control.NextNode;
-                        controlOptions = nextNode.Value;
-                    }
-                    else
-                    {
-                        controlOptions = "TODO: Still Pending";
-                    }
-                }
-                else if (controlName.Equals("Section", StringComparison.OrdinalIgnoreCase))
-                {
-                    string controlClass = control.Attribute("class")?.Value ?? string.Empty;
-                    controlOptions = controlClass;
-                }
-                else if (controlType == "Unknown Control" && !controlName.Contains("DTPicker"))
-                {
-                    controlOptions = "TODO: Still Pending";
-                }
-
-
-                Controls.Add(new Control
-                {
-                    Name = controlName,
-                    Type = controlType,
-                    Binding = control.Attribute(XName.Get("binding", "http://schemas.microsoft.com/office/infopath/2003"))?.Value ?? "Not bound",
-                    Details = controlOptions
-                });
-
-            }
-        }
-
-        private string DetermineControlType(XElement control)
-        {
-            // Attempt to determine control type based on attributes or parent elements
-            // This is a simplified approach
-
-            if (control.Name.LocalName == "input")
-            {
-                var type = control.Attribute("type")?.Value;
-                return !string.IsNullOrEmpty(type) ? type : "Text Box";
-            }
-            else if (control.Name.LocalName == "select")
-            {
-                return "Drop-down List";
-            }
-            else if (control.Name.LocalName == "button")
-            {
-                return "Button";
-            }
-            else if (control.Name.LocalName == "span" && control.Attributes().Any(a => a.Name.LocalName == "xctname"))
-            {
-                var xctname = control.Attribute(XName.Get("xctname", "http://schemas.microsoft.com/office/infopath/2003"))?.Value ?? "";
-
-                if (xctname.Contains("CheckBox"))
-                {
-                    return "Check Box";
-                }
-                else if (xctname.Contains("DatePicker"))
-                {
-                    return "Date Picker";
-                }
-                else if (xctname.Contains("ListBox"))
-                {
-                    return "List Box";
-                }
-                else
-                {
-                    return xctname;
-                }
-            }
-            else if ((control.Name.LocalName == "tbody" || control.Name.LocalName == "div")
-                && control.Attributes().Any(a => a.Name.LocalName == "xctname"))
-            {
-                var xctname = control.Attribute(XName.Get("xctname", "http://schemas.microsoft.com/office/infopath/2003"))?.Value ?? "";
-                return xctname;
-            }
-
-            return "Unknown Control";
-        }
+        }                     
+        
         private void ParseDllFile(string dllFilePath)
         {
             Console.WriteLine($"Parsing Dll file: {Path.GetFileName(dllFilePath)}");
@@ -631,30 +316,7 @@ namespace DocumentGeneratorService
                 XDocument xmlDoc = XDocument.Load(scriptFilePath);
                 string scriptContent = xmlDoc.Root.Element("Script").Value;
 
-                // Regex pattern to extract ALL functions
-              //  MatchCollection matches = Regex.Matches(scriptContent, @"function\s+(\w+)\s*\(([^)]*)\)\s*{[^}]*return\s+(\w+);", RegexOptions.Singleline);
-                // Look for function definitions
-                //var functionMatches = System.Text.RegularExpressions.Regex.Matches(
-                //    scriptContent,
-                //    @"function\s+([A-Za-z0-9_:]+)\s*\(([^)]*)\)"
-                //);
-
-                //foreach (System.Text.RegularExpressions.Match match in matches)
-                //{
-                //    string functionName = match.Groups[1].Value;
-                //    string parameters = match.Groups[2].Value;
-
-                //    Scripts.Add(new Script
-                //    {
-                //        Name = functionName,
-                //        Parameters = parameters,
-                //        FilePath = Path.GetFileName(scriptFilePath)
-                //    });
-                //}
-
-                //MatchCollection matches = Regex.Matches(scriptContent, @"function\s+(\w+)\s*\(([^)]*)\)\s*{[^}]*return\s+(\w+);", RegexOptions.Singleline);
                 MatchCollection matches = Regex.Matches(scriptContent, @"function\s+(\w+)\s*\(([^)]*)\)\s*{([^}]*)}", RegexOptions.Singleline);
-                // List<FormScript> functionsList = new List<FormScript>();
 
                 foreach (Match match in matches)
                 {
@@ -691,7 +353,7 @@ namespace DocumentGeneratorService
                 var expressionValue = rule.Descendants(nintexNamespace + "ExpressionValue").FirstOrDefault()?.Value;
                 var ruleTypeValue = rule.Descendants(nintexNamespace + "RuleType").FirstOrDefault()?.Value;
                 var controlIdsValue = rule.Descendants(nintexNamespace + "ControlIds").FirstOrDefault()?.Value;
-
+                var disableValue = rule.Descendants(nintexNamespace + "Disable").FirstOrDefault()?.Value;
                 var controlInfo = Controls.FirstOrDefault(c => c.UniqueId == controlIdsValue);
                 var controlName = controlInfo?.Name ?? "Unknown Control";
 
@@ -700,7 +362,8 @@ namespace DocumentGeneratorService
                     Expression = expression,
                     ExpressionValue = expressionValue,
                     RuleType = ruleTypeValue,
-                    ControlName = controlName
+                    ControlName = controlName,
+                    IsDisabled = disableValue == "true" ? "Yes" : "No"
                 });
 
                 Console.WriteLine(new string('-', 50)); // Separator
@@ -708,45 +371,7 @@ namespace DocumentGeneratorService
 
             Console.WriteLine($"Found {Rules.Count} Rules.");   
         }
-
-        private void ParseWorkflows(XDocument manifest, XNamespace xsfNs)
-        {
-            Console.WriteLine("Looking for workflow information...");
-
-            // Look for workflow elements - this varies by InfoPath version and SharePoint integration
-            var workflowElements = manifest.Descendants().Where(e =>
-                e.Name.LocalName.Contains("workflow") ||
-                e.Name.LocalName.Contains("Workflow"));
-
-            foreach (var workflowElement in workflowElements)
-            {
-                string workflowName = workflowElement.Attribute("name")?.Value ??
-                                      workflowElement.Attribute("displayName")?.Value ??
-                                      "Unnamed Workflow";
-
-                Workflows.Add(new Workflow
-                {
-                    Name = workflowName,
-                    Description = GetWorkflowDescription(workflowElement)
-                });
-            }
-
-            // If we didn't find any specific workflow elements, check for SharePoint Submit options
-            if (Workflows.Count == 0)
-            {
-                var submitOptions = manifest.Descendants(xsfNs + "submit");
-                if (submitOptions.Any())
-                {
-                    Workflows.Add(new Workflow
-                    {
-                        Name = "Form Submit Process",
-                        Description = "Standard form submission process"
-                    });
-                }
-            }
-
-            Console.WriteLine($"Found {Workflows.Count} workflows.");
-        }
+        
         private void ParseImages(XDocument manifest, XNamespace xsfNs)
         {
             Console.WriteLine("Parsing images...");
@@ -774,21 +399,6 @@ namespace DocumentGeneratorService
             Console.WriteLine($"Found {ImageFiles.Count} images.");
         }
 
-        private string GetWorkflowDescription(XElement workflowElement)
-        {
-            // Try to extract a description from the workflow element
-            var description = workflowElement.Elements().FirstOrDefault(e =>
-                e.Name.LocalName.Contains("description") ||
-                e.Name.LocalName.Contains("Description"));
-
-            if (description != null)
-            {
-                return description.Value;
-            }
-
-            return "No description available";
-        }
-
         private void CreateWordDocument(string outputPath)
         {
             Console.WriteLine("Generating Word documentation...");
@@ -807,7 +417,7 @@ namespace DocumentGeneratorService
                 AddStyles(wordDocument);
 
                 // Add title and document info
-                AddDocumentTitle(body, "InfoPath Form Documentation");
+                AddDocumentTitle(body, "Nintex Form Documentation");
 
                 // Add table of contents
                 AddTableOfContents(body);
@@ -818,29 +428,28 @@ namespace DocumentGeneratorService
                 // Controls Section
                 AddSection(body, $"{sectionNumber++}. Controls", "Heading1");
                 AddControlsTable(body);
+                body.Append(new Paragraph(new Run(new Break()))); // Add a line break
 
                 // Rules Section
                 AddSection(body, $"{sectionNumber++}. Rules", "Heading1");
                 AddRulesTable(body);
+                body.Append(new Paragraph(new Run(new Break()))); // Add a line break
 
                 // Data Sources Section
                 AddSection(body, $"{sectionNumber++}. Layouts", "Heading1");
                 AddFormLayouts(body);
+                body.Append(new Paragraph(new Run(new Break()))); // Add a line break
 
                 // Scripts Section
                 AddSection(body, $"{sectionNumber++}. Scripts and Business Logic", "Heading1");
                 AddScriptsTable(body);
+                body.Append(new Paragraph(new Run(new Break()))); // Add a line break
 
-                // Workflows Section
-                AddSection(body, $"{sectionNumber++}. Workflows", "Heading1");
-                AddWorkflowsTable(body);
-
-                // Dependencies Section
-                AddSection(body, $"{sectionNumber++}. Dependencies", "Heading1");
-                AddDependenciesTable(body);
                 // Dependencies Section
                 AddSection(body, $"{sectionNumber++}. User Variables", "Heading1");
                 AddUserVariables(body);
+                body.Append(new Paragraph(new Run(new Break()))); // Add a line break
+
                 // Dependencies Section
                 AddSection(body, $"{sectionNumber++}. Assets", "Heading1");
                 AddImagesTable(body);
@@ -1047,8 +656,7 @@ namespace DocumentGeneratorService
             // Header cells
             headerRow.Append(CreateTableCell("Control Name", true));
             headerRow.Append(CreateTableCell("Type", true));
-            headerRow.Append(CreateTableCell("Binding", true));
-            headerRow.Append(CreateTableCell("Details", true));
+            headerRow.Append(CreateTableCell("IsVisible", true));
 
             table.Append(headerRow);
 
@@ -1059,8 +667,7 @@ namespace DocumentGeneratorService
 
                 dataRow.Append(CreateTableCell(control.Name));
                 dataRow.Append(CreateTableCell(control.Type));
-                dataRow.Append(CreateTableCell(control.Binding));
-                dataRow.Append(CreateTableCell(control.Details));
+                dataRow.Append(CreateTableCell(control.IsVisible));
 
                 table.Append(dataRow);
             }
@@ -1104,6 +711,7 @@ namespace DocumentGeneratorService
             // Header cells
             headerRow.Append(CreateTableCell("Control Name", true));
             headerRow.Append(CreateTableCell("Rule Type", true));
+            headerRow.Append(CreateTableCell("IsDisabled", true));
             headerRow.Append(CreateTableCell("Expression", true));
             headerRow.Append(CreateTableCell("Expression Value", true));
 
@@ -1115,6 +723,7 @@ namespace DocumentGeneratorService
                 TableRow dataRow = new TableRow();
                 dataRow.Append(CreateTableCell(rule.ControlName));
                 dataRow.Append(CreateTableCell(rule.RuleType));
+                dataRow.Append(CreateTableCell(rule.IsDisabled));
                 dataRow.Append(CreateTableCell(rule.Expression));
                 dataRow.Append(CreateTableCell(rule.ExpressionValue));               
 
@@ -1286,105 +895,7 @@ namespace DocumentGeneratorService
             }
 
             body.Append(table);
-        }
-
-        private void AddWorkflowsTable(Body body)
-        {
-            if (Workflows.Count == 0)
-            {
-                AddText(body, "No workflows found in the form.", "Normal");
-                return;
-            }
-
-            Table table = new Table();
-
-            // Set table properties
-            TableProperties tableProperties = new TableProperties();
-            TableBorders tableBorders = new TableBorders();
-            TopBorder topBorder = new TopBorder() { Val = BorderValues.Single, Size = 4U };
-            BottomBorder bottomBorder = new BottomBorder() { Val = BorderValues.Single, Size = 4U };
-            LeftBorder leftBorder = new LeftBorder() { Val = BorderValues.Single, Size = 4U };
-            RightBorder rightBorder = new RightBorder() { Val = BorderValues.Single, Size = 4U };
-            InsideHorizontalBorder insideHBorder = new InsideHorizontalBorder() { Val = BorderValues.Single, Size = 4U };
-            InsideVerticalBorder insideVBorder = new InsideVerticalBorder() { Val = BorderValues.Single, Size = 4U };
-
-            tableBorders.Append(topBorder);
-            tableBorders.Append(bottomBorder);
-            tableBorders.Append(leftBorder);
-            tableBorders.Append(rightBorder);
-            tableBorders.Append(insideHBorder);
-            tableBorders.Append(insideVBorder);
-
-            tableProperties.Append(tableBorders);
-            table.Append(tableProperties);
-
-            // Add header row
-            TableRow headerRow = new TableRow();
-
-            // Header cells
-            headerRow.Append(CreateTableCell("Workflow Name", true));
-            headerRow.Append(CreateTableCell("Description", true));
-
-            table.Append(headerRow);
-
-            // Add data rows
-            foreach (var workflow in Workflows)
-            {
-                TableRow dataRow = new TableRow();
-
-                dataRow.Append(CreateTableCell(workflow.Name));
-                dataRow.Append(CreateTableCell(workflow.Description));
-
-                table.Append(dataRow);
-            }
-
-            body.Append(table);
-        }
-
-        private void AddDependenciesTable(Body body)
-        {
-            if (DependencyList.Count == 0)
-            {
-                AddText(body, "No external dependencies detected.", "Normal");
-                return;
-            }
-
-            Table table = new Table();
-
-            // Set table borders (using the same style as other tables)
-            TableProperties tableProperties = new TableProperties();
-            TableBorders tableBorders = new TableBorders(
-                new TopBorder() { Val = BorderValues.Single, Size = 4U },
-                new BottomBorder() { Val = BorderValues.Single, Size = 4U },
-                new LeftBorder() { Val = BorderValues.Single, Size = 4U },
-                new RightBorder() { Val = BorderValues.Single, Size = 4U },
-                new InsideHorizontalBorder() { Val = BorderValues.Single, Size = 4U },
-                new InsideVerticalBorder() { Val = BorderValues.Single, Size = 4U }
-            );
-            tableProperties.Append(tableBorders);
-            table.Append(tableProperties);
-
-            // Header row
-            TableRow headerRow = new TableRow();
-            headerRow.Append(CreateTableCell("DLL Name", true));
-            headerRow.Append(CreateTableCell("Project", true));
-            headerRow.Append(CreateTableCell("Language", true));
-            headerRow.Append(CreateTableCell("Script Language Version", true));
-            table.Append(headerRow);
-
-            // Data rows for each dependency
-            foreach (var dep in DependencyList)
-            {
-                TableRow row = new TableRow();
-                row.Append(CreateTableCell(dep.Name));
-                row.Append(CreateTableCell(dep.Project));
-                row.Append(CreateTableCell(dep.Language));
-                row.Append(CreateTableCell(dep.ScriptLanguageVersion));
-                table.Append(row);
-            }
-
-            body.Append(table);
-        }
+        }        
 
         private void AddImagesTable(Body body)
         {
@@ -1634,15 +1145,6 @@ namespace DocumentGeneratorService
         }
     }
 
-    // Data models for storing InfoPath form information
-    //public class Control
-    //{
-    //    public string Details { get; set; }
-    //    public string Name { get; set; }
-    //    public string Type { get; set; }
-    //    public string Binding { get; set; }
-    //}
-
     public class Layouts
     {
         public string Name { get; set; }
@@ -1655,31 +1157,6 @@ namespace DocumentGeneratorService
         public string ExpressionValue { get; set; }
         public string RuleType { get; set; }
         public string ControlName { get; set; }
-    }
-
-    //public class Script
-    //{
-    //    public string Name { get; set; }
-    //    public string Parameters { get; set; }
-    //    public string FilePath { get; set; }
-    //}
-
-    //public class Workflow
-    //{
-    //    public string Name { get; set; }
-    //    public string Description { get; set; }
-    //}
-
-    //public class Dependency
-    //{
-    //    public string Name { get; set; }
-    //    public string Project { get; set; }
-    //    public string Language { get; set; }
-    //    public string ScriptLanguageVersion { get; set; }
-    //}
-
-    //public class ImageFile
-    //{
-    //    public string FileName { get; set; }
-    //}
+        public string IsDisabled { get; set; }
+    }    
 }

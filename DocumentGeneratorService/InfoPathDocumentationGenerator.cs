@@ -813,28 +813,34 @@ namespace DocumentGeneratorService
                 // Controls Section
                 AddSection(body, $"{sectionNumber++}. Controls", "Heading1");
                 AddControlsTable(body);
+                body.Append(new Paragraph(new Run(new Break()))); // Add a line break
 
                 // Rules Section
                 AddSection(body, $"{sectionNumber++}. Validation Rules", "Heading1");
                 AddRulesTable(body);
+                body.Append(new Paragraph(new Run(new Break()))); // Add a line break
 
                 // Data Sources Section
                 AddSection(body, $"{sectionNumber++}. Data Sources", "Heading1");
                 AddDataSourcesTable(body);
+                body.Append(new Paragraph(new Run(new Break()))); // Add a line break
 
                 // Scripts Section
                 AddSection(body, $"{sectionNumber++}. Scripts and Business Logic", "Heading1");
                 AddScriptsTable(body);
+                body.Append(new Paragraph(new Run(new Break()))); // Add a line break
 
                 // Workflows Section
                 AddSection(body, $"{sectionNumber++}. Workflows", "Heading1");
                 AddWorkflowsTable(body);
+                body.Append(new Paragraph(new Run(new Break()))); // Add a line break
 
                 // Dependencies Section
                 AddSection(body, $"{sectionNumber++}. Dependencies", "Heading1");
                 AddDependenciesTable(body);
+                body.Append(new Paragraph(new Run(new Break()))); // Add a line break
 
-                // Dependencies Section
+                // Images Section
                 AddSection(body, $"{sectionNumber++}. Images", "Heading1");
                 AddImagesTable(body);
 
@@ -1588,6 +1594,7 @@ namespace DocumentGeneratorService
         public string Type { get; set; }
         public string Binding { get; set; }
         public string UniqueId { get; set; }
+        public string IsVisible { get; set; }
     }
 
     public class DataSource
