@@ -43,8 +43,6 @@ namespace DocumentGeneratorService
                 // Extract .xsn file which is basically a ZIP/CAB file
                 ExtractXsnContents(infoPathFilePath, tempFolder);
 
-                LoadControls(tempFolder);
-                LoadUserVariables(tempFolder);
                 // Parse form definition
                 ParseFormDefinition(tempFolder, outputDocPath);
 
@@ -54,6 +52,98 @@ namespace DocumentGeneratorService
             finally
             {
 
+            }
+        }
+
+        private void LoadRules(string directoryPath)
+        {
+            try
+            {
+                // Find all files ending with "rules.xml" in the specified directory and subdirectories
+                var ruleFiles = Directory.GetFiles(directoryPath, "*Rules.xml", SearchOption.AllDirectories);
+
+                if (ruleFiles.Length == 0)
+                {
+                    Console.WriteLine("No files ending with 'Rules.xml' found in the specified directory.");
+                    return;
+                }
+
+                // Process each file
+                foreach (var filePath in ruleFiles)
+                {
+                    Console.WriteLine($"Processing: {filePath}");
+
+                    // Load the XML from the file
+                    XDocument xmlDoc = XDocument.Load(filePath);
+
+                    // Define namespaces
+                    XNamespace defaultNs = "http://schemas.datacontract.org/2004/07/Nintex.Forms";
+                    XNamespace xsiNs = "http://www.w3.org/2001/XMLSchema-instance";
+
+                    // Extract FormControlProperties, including nested elements
+                    var rules = xmlDoc.Descendants(defaultNs + "Rule")
+                                         .Select(rule => new NintexFormRule
+                                         {
+                                             Expression = rule.Element(defaultNs + "Expression")?.Value,
+                                             ExpressionValue = rule.Element(defaultNs + "ExpressionValue")?.Value,
+                                             RuleType = rule.Element(defaultNs + "RuleType")?.Value,
+                                             ControlName = Controls.FirstOrDefault(c => c.UniqueId == rule.Element(defaultNs + "ControlIds")?.Value)?.Name ?? "Unknown Control",
+                                             IsDisabled = rule.Element(defaultNs + "Disable")?.Value == "true" ? "Yes" : "No"
+                                         })
+                                         .ToList();
+
+                    //var controlInfo = Controls.FirstOrDefault(c => c.UniqueId == controlIdsValue);
+                    //var controlName = controlInfo?.Name ?? "Unknown Control";
+
+                    this.Rules.AddRange(rules);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+            }
+        }
+
+        private void LoadLayouts(string directoryPath)
+        {
+            try
+            {
+                // Find all files ending with "rules.xml" in the specified directory and subdirectories
+                var layoutFiles = Directory.GetFiles(directoryPath, "*Layouts.xml", SearchOption.AllDirectories);
+
+                if (layoutFiles.Length == 0)
+                {
+                    Console.WriteLine("No files ending with 'Layouts.xml' found in the specified directory.");
+                    return;
+                }
+
+                // Process each file
+                foreach (var filePath in layoutFiles)
+                {
+                    Console.WriteLine($"Processing: {filePath}");
+
+                    // Load the XML from the file
+                    XDocument xmlDoc = XDocument.Load(filePath);
+
+                    // Define namespaces
+                    XNamespace defaultNs = "http://schemas.datacontract.org/2004/07/Nintex.Forms";
+                    XNamespace xsiNs = "http://www.w3.org/2001/XMLSchema-instance";
+
+                    // Extract FormControlProperties, including nested elements
+                    var layouts = xmlDoc.Descendants(defaultNs + "FormLayout")
+                                         .Select(layout => new Layouts
+                                         {
+                                             Name = layout.Element(defaultNs + "DeviceName")?.Value,
+                                             Title = layout.Element(defaultNs + "Title")?.Value
+                                         })
+                                         .ToList();
+
+                    this.FormLayouts.AddRange(layouts);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
             }
         }
 
@@ -164,13 +254,13 @@ namespace DocumentGeneratorService
         {
             Console.WriteLine("Parsing form definition...");
 
-            //Look for key files
+            ////Look for key files
 
             string manifestFile = Path.Combine(extractedFolder, "manifest.xml");
             if (!File.Exists(manifestFile))
-                {
-                    throw new FileNotFoundException("Manifest file (manifest.xsf) not found in the InfoPath form package.");
-                }
+            {
+                throw new FileNotFoundException("Manifest file (manifest.xsf) not found in the InfoPath form package.");
+            }
 
             // Parse the manifest file
             XDocument manifest = XDocument.Load(manifestFile);
@@ -180,20 +270,32 @@ namespace DocumentGeneratorService
             //var formName = manifest.Descendants("title").FirstOrDefault()?.Value ?? "Unnamed Form";
             //Console.WriteLine($"Form name: {formName}");
 
-            string FormFolder = Path.Combine(extractedFolder, "Form");
-            string layoutsFile = Path.Combine(FormFolder, "FormLayouts.xml");
-            XDocument layoutFormat = XDocument.Load(layoutsFile);
-            XNamespace nintexNamespace = "http://schemas.datacontract.org/2004/07/Nintex.Forms";
-            ParseLayouts(layoutFormat, nintexNamespace);
+            //string FormFolder = Path.Combine(extractedFolder, "Form");
+            //string layoutsFile = Path.Combine(FormFolder, "FormLayouts.xml");
+            //XDocument layoutFormat = XDocument.Load(layoutsFile);
+            //XNamespace nintexNamespace = "http://schemas.datacontract.org/2004/07/Nintex.Forms";
+            //ParseLayouts(layoutFormat, nintexNamespace);
 
-            // Parse data sources
-            string rulesFile = Path.Combine(FormFolder, "FormRules.xml");
-            XDocument rulesFormat = XDocument.Load(rulesFile);
+            //// Parse data sources
+            //string rulesFile = Path.Combine(FormFolder, "FormRules.xml");
+            //XDocument rulesFormat = XDocument.Load(rulesFile);
 
-            // Parse rules and validations from manifest
-            ParseRulesAndValidations(rulesFormat, nintexNamespace);
+            //// Parse rules and validations from manifest
+            //ParseRulesAndValidations(rulesFormat, nintexNamespace);
 
-            // Parse form files to find controls            
+            // Parse form files to find controls
+
+            // Parse controls
+            LoadControls(extractedFolder);
+
+            // Parse User Variables
+            LoadUserVariables(extractedFolder);
+
+            // Parse Layouts
+            LoadLayouts(extractedFolder);
+
+            // Parse Rules
+            LoadRules(extractedFolder);
 
             // Look for script files
             foreach (var scriptFile in Directory.GetFiles(extractedFolder, "*.js"))
@@ -217,7 +319,7 @@ namespace DocumentGeneratorService
                
         private void ParseLayouts(XDocument layoutFormat, XNamespace layoutNamespace)
         {
-            Console.WriteLine("Parsing layouts...");
+            Console.WriteLine("Parsing rules...");
 
             var layouts = layoutFormat.Descendants(layoutNamespace + "FormLayout");
 
