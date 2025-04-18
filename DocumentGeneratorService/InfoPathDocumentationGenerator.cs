@@ -1587,6 +1587,7 @@ namespace DocumentGeneratorService
         public string Name { get; set; }
         public string Type { get; set; }
         public string Binding { get; set; }
+        public string UniqueId { get; set; }
     }
 
     public class DataSource

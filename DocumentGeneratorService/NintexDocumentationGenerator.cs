@@ -89,7 +89,8 @@ namespace DocumentGeneratorService
                                              //Details = control.Attribute(xsiNs + "type")?.Value,
                                              Name = control.Element(defaultNs + "DisplayName")?.Value,
                                              Type = control.Attribute(xsiNs + "type")?.Value,
-                                             Binding = control.Element(defaultNs + "AlternateText")?.Value
+                                             Binding = control.Element(defaultNs + "AlternateText")?.Value,
+                                             UniqueId = control.Element(defaultNs + "UniqueId")?.Value
                                          })
                                          .ToList();
 
@@ -643,11 +644,18 @@ namespace DocumentGeneratorService
                 }
 
                 var expressionValue = rule.Descendants(nintexNamespace + "ExpressionValue").FirstOrDefault()?.Value;
+                var ruleTypeValue = rule.Descendants(nintexNamespace + "RuleType").FirstOrDefault()?.Value;
+                var controlIdsValue = rule.Descendants(nintexNamespace + "ControlIds").FirstOrDefault()?.Value;
+
+                var controlInfo = Controls.FirstOrDefault(c => c.UniqueId == controlIdsValue);
+                var controlName = controlInfo?.Name ?? "Unknown Control";
 
                 Rules.Add(new NintexFormRule
                 {
                     Expression = expression,
-                    ExpressionValue = expressionValue
+                    ExpressionValue = expressionValue,
+                    RuleType = ruleTypeValue,
+                    ControlName = controlName
                 });
 
                 Console.WriteLine(new string('-', 50)); // Separator
@@ -1047,8 +1055,10 @@ namespace DocumentGeneratorService
             TableRow headerRow = new TableRow();
 
             // Header cells
+            headerRow.Append(CreateTableCell("Control Name", true));
+            headerRow.Append(CreateTableCell("Rule Type", true));
             headerRow.Append(CreateTableCell("Expression", true));
-            headerRow.Append(CreateTableCell("ExpressionValue", true));
+            headerRow.Append(CreateTableCell("Expression Value", true));
 
             table.Append(headerRow);
 
@@ -1056,7 +1066,8 @@ namespace DocumentGeneratorService
             foreach (var rule in Rules)
             {
                 TableRow dataRow = new TableRow();
-
+                dataRow.Append(CreateTableCell(rule.ControlName));
+                dataRow.Append(CreateTableCell(rule.RuleType));
                 dataRow.Append(CreateTableCell(rule.Expression));
                 dataRow.Append(CreateTableCell(rule.ExpressionValue));               
 
@@ -1540,6 +1551,8 @@ namespace DocumentGeneratorService
     {        
         public string Expression { get; set; }        
         public string ExpressionValue { get; set; }
+        public string RuleType { get; set; }
+        public string ControlName { get; set; }
     }
 
     //public class Script
