@@ -86,7 +86,7 @@ namespace DocumentGeneratorService
                     var controls = xmlDoc.Descendants(defaultNs + "FormControlProperties")
                                          .Select(control => new Control
                                          {
-                                             Details = control.Attribute(xsiNs + "type")?.Value,
+                                             //Details = control.Attribute(xsiNs + "type")?.Value,
                                              Name = control.Element(defaultNs + "DisplayName")?.Value,
                                              Type = control.Attribute(xsiNs + "type")?.Value,
                                              Binding = control.Element(defaultNs + "AlternateText")?.Value
@@ -767,11 +767,11 @@ namespace DocumentGeneratorService
                 AddControlsTable(body);
 
                 // Rules Section
-                AddSection(body, $"{sectionNumber++}. Validation Rules", "Heading1");
+                AddSection(body, $"{sectionNumber++}. Rules", "Heading1");
                 AddRulesTable(body);
 
                 // Data Sources Section
-                AddSection(body, $"{sectionNumber++}. Data Sources", "Heading1");
+                AddSection(body, $"{sectionNumber++}. Layouts", "Heading1");
                 AddFormLayouts(body);
 
                 // Scripts Section
@@ -787,7 +787,7 @@ namespace DocumentGeneratorService
                 AddDependenciesTable(body);
 
                 // Dependencies Section
-                AddSection(body, $"{sectionNumber++}. Images", "Heading1");
+                AddSection(body, $"{sectionNumber++}. Assets", "Heading1");
                 AddImagesTable(body);
 
                 // Add page numbers
@@ -1100,9 +1100,9 @@ namespace DocumentGeneratorService
             TableRow headerRow = new TableRow();
 
             // Header cells
-            headerRow.Append(CreateTableCell("Data Source Name", true));
-            headerRow.Append(CreateTableCell("Type", true));
-            headerRow.Append(CreateTableCell("Description", true));
+            headerRow.Append(CreateTableCell("Device Name", true));
+            headerRow.Append(CreateTableCell("Title", true));
+           // headerRow.Append(CreateTableCell("Description", true));
 
             table.Append(headerRow);
 
