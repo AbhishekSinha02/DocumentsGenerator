@@ -324,7 +324,7 @@
             // 
             // pictureBox1
             // 
-            pictureBox1.BackgroundImage = Properties.Resources.yash_background;
+            pictureBox1.Image = Properties.Resources.yash_background;
             pictureBox1.Location = new Point(0, 0);
             pictureBox1.Name = "pictureBox1";
             pictureBox1.Size = new Size(1122, 155);
