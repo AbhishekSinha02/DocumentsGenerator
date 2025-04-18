@@ -265,26 +265,7 @@ namespace DocumentGeneratorService
             // Parse the manifest file
             XDocument manifest = XDocument.Load(manifestFile);
             XNamespace xsfNs = "http://schemas.microsoft.com/office/infopath/2003/solutionDefinition";
-
-            // Get basic form information
-            //var formName = manifest.Descendants("title").FirstOrDefault()?.Value ?? "Unnamed Form";
-            //Console.WriteLine($"Form name: {formName}");
-
-            //string FormFolder = Path.Combine(extractedFolder, "Form");
-            //string layoutsFile = Path.Combine(FormFolder, "FormLayouts.xml");
-            //XDocument layoutFormat = XDocument.Load(layoutsFile);
-            //XNamespace nintexNamespace = "http://schemas.datacontract.org/2004/07/Nintex.Forms";
-            //ParseLayouts(layoutFormat, nintexNamespace);
-
-            //// Parse data sources
-            //string rulesFile = Path.Combine(FormFolder, "FormRules.xml");
-            //XDocument rulesFormat = XDocument.Load(rulesFile);
-
-            //// Parse rules and validations from manifest
-            //ParseRulesAndValidations(rulesFormat, nintexNamespace);
-
-            // Parse form files to find controls
-
+            
             // Parse controls
             LoadControls(extractedFolder);
 
@@ -315,39 +296,7 @@ namespace DocumentGeneratorService
 
             //CopyFilesIntoReferenceFolder(outputPath, extractedFolder);
             Console.WriteLine("Parsing completed.");
-        }
-               
-        private void ParseLayouts(XDocument layoutFormat, XNamespace layoutNamespace)
-        {
-            Console.WriteLine("Parsing rules...");
-
-            var layouts = layoutFormat.Descendants(layoutNamespace + "FormLayout");
-
-            foreach (var layout in layouts)
-            {
-                var deviceName = layout.Descendants(layoutNamespace + "DeviceName").FirstOrDefault()?.Value;
-             
-                if (deviceName == null)
-                {
-                    Console.WriteLine("DeviceName not found in layout.");
-                    continue;
-                }
-
-                var title = layout.Descendants(layoutNamespace + "Title").FirstOrDefault()?.Value;
-
-                //var formControllayouts = layout.Descendants(layoutNamespace + "FormControlLayout");
-
-                FormLayouts.Add(new Layouts
-                {
-                    Name = deviceName,
-                    Title = title
-                });
-
-                Console.WriteLine(new string('-', 50)); // Separator
-            }            
-
-            Console.WriteLine($"Found {FormLayouts.Count} Formlayouts.");
-        }                     
+        }                
         
         private void ParseDllFile(string dllFilePath)
         {
@@ -355,7 +304,6 @@ namespace DocumentGeneratorService
             try
             {
                 Assembly assembly = Assembly.LoadFrom(dllFilePath);
-
 
                 using (var stream = new FileStream(dllFilePath, FileMode.Open, FileAccess.Read))
                 {
@@ -434,44 +382,6 @@ namespace DocumentGeneratorService
             {
                 Console.WriteLine($"Warning: Could not parse script file {scriptFilePath}: {ex.Message}");
             }
-        }
-
-        private void ParseRulesAndValidations(XDocument rulesFormat, XNamespace nintexNamespace)
-        {
-            Console.WriteLine("Parsing rules and validations...");
-
-            var rules = rulesFormat.Descendants(nintexNamespace + "Rule");
-
-            foreach (var rule in rules)
-            {
-                var expression = rule.Descendants(nintexNamespace + "Expression").FirstOrDefault()?.Value;
-
-                if (expression == null)
-                {
-                    Console.WriteLine("Expression not found in rule.");
-                    continue;
-                }
-
-                var expressionValue = rule.Descendants(nintexNamespace + "ExpressionValue").FirstOrDefault()?.Value;
-                var ruleTypeValue = rule.Descendants(nintexNamespace + "RuleType").FirstOrDefault()?.Value;
-                var controlIdsValue = rule.Descendants(nintexNamespace + "ControlIds").FirstOrDefault()?.Value;
-                var disableValue = rule.Descendants(nintexNamespace + "Disable").FirstOrDefault()?.Value;
-                var controlInfo = Controls.FirstOrDefault(c => c.UniqueId == controlIdsValue);
-                var controlName = controlInfo?.Name ?? "Unknown Control";
-
-                Rules.Add(new NintexFormRule
-                {
-                    Expression = expression,
-                    ExpressionValue = expressionValue,
-                    RuleType = ruleTypeValue,
-                    ControlName = controlName,
-                    IsDisabled = disableValue == "true" ? "Yes" : "No"
-                });
-
-                Console.WriteLine(new string('-', 50)); // Separator
-            }
-
-            Console.WriteLine($"Found {Rules.Count} Rules.");   
         }
         
         private void ParseImages(XDocument manifest, XNamespace xsfNs)
